@@ -1,4 +1,4 @@
-from pest_bot import style
+from helper_bot import style
 
 
 def test_scrub_strips_markdown():

@@ -1,5 +1,5 @@
 # Style examples the bot imitates. These few are hand-written seeds so the bot has
-# something to go on before you run `pest-bot study`, which REPLACES this file with
+# something to go on before you run `helper-bot study`, which REPLACES this file with
 # real upvoted replies from your subreddits. Run study before you trust the output.
 samples:
 - subreddit: pestcontrol

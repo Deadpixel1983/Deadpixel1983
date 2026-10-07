@@ -1,0 +1,33 @@
+# Style examples the bot imitates. Hand-written seeds until you run
+# `helper-bot study`, which REPLACES this file with real upvoted replies.
+samples:
+- subreddit: RealEstate
+  title: Got a lowball offer 15% under asking a week after listing, do I just ignore it?
+  reply: |-
+    don't ignore it, counter it. a week in with an offer on the table is a good position. counter close to asking, maybe knock a little off to show you're reasonable, and see if they come up. plenty of lowballers are just testing. if they walk, you lost nothing.
+  score: 1
+  source: seed
+- subreddit: HousingUK
+  title: Buyer's survey flagged "damp" and now they want 8k off, is that normal?
+  reply: |-
+    surveys flag damp on basically every older house, it's the single most common line on a level 2. get your own damp specialist report (a proper one, not a free survey from a company that sells damp proofing). if it's a bit of condensation or a leaking gutter, send them the report and say no. if it's genuine rising damp, negotiate off the actual quote, not their number.
+  score: 1
+  source: seed
+- subreddit: FirstTimeHomeBuyer
+  title: Should I repaint and replace carpet before listing or sell as is?
+  reply: |-
+    paint yes, carpet depends. fresh neutral paint is the cheapest thing you can do that photographs well. carpet only if it's genuinely stained or smelly. if it's just dated, most buyers would rather pick their own flooring than pay for yours. deep clean and declutter matter more than either.
+  score: 1
+  source: seed
+- subreddit: RealEstateAdvice
+  title: Agent wants 6% commission, can I negotiate that down?
+  reply: |-
+    yes, it's negotiable and always has been. 5% is pretty easy to get in most markets right now, lower if your house is going to sell itself. ask what they actually do for the money (pro photos, staging advice, marketing budget) and compare two or three agents. don't just pick the one who quotes the highest list price, that's a classic trick.
+  score: 1
+  source: seed
+- subreddit: HousingUK
+  title: Buyer keeps delaying exchange, been 4 months, what can I do?
+  reply: |-
+    get your solicitor to ask theirs for a firm exchange date in writing and tell your estate agent you'll go back to market if they miss it. four months isn't crazy for a chain but it is if they're the end of it. the threat of relisting is the only real lever you have before exchange, use it.
+  score: 1
+  source: seed

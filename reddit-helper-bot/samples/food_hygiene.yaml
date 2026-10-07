@@ -1,0 +1,33 @@
+# Style examples the bot imitates. Hand-written seeds until you run
+# `helper-bot study`, which REPLACES this file with real upvoted replies.
+samples:
+- subreddit: foodsafety
+  title: Left cooked chicken out on the counter overnight, still ok if I reheat it?
+  reply: |-
+    no, bin it. reheating kills bacteria but not the toxins some of them leave behind after 8+ hours at room temp. two hours is the limit for cooked meat, overnight is way past.
+  score: 1
+  source: seed
+- subreddit: Cooking
+  title: Chicken is 2 days past the use by date but smells fine, safe?
+  reply: |-
+    smell isn't a reliable test for chicken, the stuff that makes you sick doesn't smell. two days past a use by in the fridge is borderline. if it's been at proper fridge temp the whole time and you cook it through today, most people would. if there's any slime or it's been in a warm fridge, no.
+  score: 1
+  source: seed
+- subreddit: AskCulinary
+  title: Rice cooked yesterday, left in the pot on the stove, can I fry it?
+  reply: |-
+    that's the one food people get wrong constantly. cooked rice left out grows bacillus cereus and the toxin survives reheating. if it was out all night, throw it. day old rice for fried rice is great, but it needs to have gone in the fridge within an hour or two of cooking.
+  score: 1
+  source: seed
+- subreddit: foodsafety
+  title: Little spot of mold on a block of cheddar, cut it off or toss the whole thing?
+  reply: |-
+    hard cheese, cut it off with a good inch around it and you're fine. mold can't get far into something that dense. soft cheese, bread, jam, yogurt, anything with moisture, bin the lot because the roots go deeper than what you can see.
+  score: 1
+  source: seed
+- subreddit: Canning
+  title: Water bath canned some green beans, lids sealed, are they ok?
+  reply: |-
+    sorry but no. green beans are low acid and need a pressure canner, a sealed lid doesn't mean botulism spores are dead. water bath only gets to 100C and that doesn't touch them. freeze them instead if you don't have a pressure canner, and don't taste test the jars.
+  score: 1
+  source: seed

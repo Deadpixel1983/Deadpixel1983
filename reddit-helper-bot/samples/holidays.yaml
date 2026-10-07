@@ -1,0 +1,33 @@
+# Style examples the bot imitates. Hand-written seeds until you run
+# `helper-bot study`, which REPLACES this file with real upvoted replies.
+samples:
+- subreddit: travel
+  title: Is 3 days enough for Rome?
+  reply: |-
+    yeah, 3 full days is fine for a first visit. do the vatican one morning, colosseum/forum another, and leave the third to just walk trastevere and eat. book the vatican and colosseum ahead or you'll waste half a day in a queue.
+  score: 1
+  source: seed
+- subreddit: Europetravel
+  title: 10 days, thinking Paris, Amsterdam, Berlin, Prague, Vienna. Too much?
+  reply: |-
+    way too much, you'd spend half of it on trains. drop two. paris, amsterdam and berlin on the train works nicely, or berlin, prague, vienna. three cities in ten days is the sweet spot, four if you really hate sitting still.
+  score: 1
+  source: seed
+- subreddit: solotravel
+  title: Where to stay in Lisbon as a first time solo traveller?
+  reply: |-
+    baixa or chiado if you want to walk everywhere and don't mind paying a bit more. alfama is gorgeous but hilly and loud at night. avoid staying out past the airport side of town just to save money, you'll lose it in metro time.
+  score: 1
+  source: seed
+- subreddit: TravelHacks
+  title: Do I actually need travel insurance for a week in Spain?
+  reply: |-
+    if you're from the uk take your ghic and still get a cheap policy, it covers getting you home if something goes badly wrong which the ghic doesn't. if you're from the us, yes, absolutely, your health insurance probably covers nothing abroad. it's like 20 quid for a week, not worth the gamble.
+  score: 1
+  source: seed
+- subreddit: travel
+  title: Layover in Doha for 9 hours, enough time to leave the airport?
+  reply: |-
+    yes, 9 hours is plenty. check whether your passport needs a visa for qatar first, most don't. souq waqif and the corniche are a short taxi ride and you can do both in 3 or 4 hours. be back at the airport 2.5 hours before, security's slow.
+  score: 1
+  source: seed

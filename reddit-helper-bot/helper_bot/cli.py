@@ -1,4 +1,4 @@
-"""Command-line entry point: pest-bot <command>."""
+"""Command-line entry point: helper-bot <command>."""
 
 from __future__ import annotations
 
@@ -10,27 +10,27 @@ import textwrap
 from . import store as store_mod, study
 from .answerer import Answerer
 from .bot import Bot
-from .config import ConfigError, load_credentials, load_settings
+from .config import ConfigError, load_all_credentials, load_settings
 from .reddit_client import RedditClient, RedditError
 from .store import Store
 
 
 def build_parser() -> argparse.ArgumentParser:
-    p = argparse.ArgumentParser(prog="pest-bot", description="Reddit pest-control helper bot.")
+    p = argparse.ArgumentParser(prog="helper-bot", description="Reddit helper bot for one or more niches.")
     p.add_argument("--config", default="config.yaml", help="path to config.yaml")
     p.add_argument("--env", default=".env", help="path to .env with credentials")
-    p.add_argument("--samples", default=study.SAMPLES_PATH, help="path to samples.yaml from `study`")
+    p.add_argument("--niche", action="append", default=None, help="restrict to this niche (repeatable)")
     p.add_argument("-v", "--verbose", action="store_true", help="debug logging")
 
     sub = p.add_subparsers(dest="command", required=True)
 
-    sub.add_parser("check", help="verify credentials and config, then exit")
+    sub.add_parser("check", help="verify credentials and config for every account, then exit")
 
-    s = sub.add_parser("study", help="collect upvoted human replies as style examples")
+    s = sub.add_parser("study", help="one-time: collect upvoted human replies per niche as style examples")
     s.add_argument("--posts", type=int, default=40, help="top posts per subreddit to look at")
     s.add_argument("--per-post", type=int, default=2, help="replies to keep per post")
     s.add_argument("--time", default="year", choices=["month", "year", "all"], help="top-posts time window")
-    s.add_argument("--subreddits", default=None, help="comma-separated list to study instead of the configured ones")
+    s.add_argument("--subreddits", default=None, help="comma-separated list to study instead of the niche's own")
 
     s = sub.add_parser("scan", help="fetch new posts and draft replies once")
     s.add_argument("--dry-run", action="store_true", help="never post, only print what would be posted")
@@ -38,14 +38,14 @@ def build_parser() -> argparse.ArgumentParser:
     s = sub.add_parser("review", help="approve, edit, or reject pending drafts")
     s.add_argument("--all", action="store_true", help="approve everything without prompting")
 
-    s = sub.add_parser("post", help="post approved drafts (respects rate limits)")
+    s = sub.add_parser("post", help="post approved drafts (respects per-account rate limits)")
     s.add_argument("--dry-run", action="store_true", help="print instead of posting")
 
     s = sub.add_parser("run", help="scan on a loop; in approval mode this only drafts")
     s.add_argument("--interval", type=int, default=600, help="seconds between scans")
     s.add_argument("--dry-run", action="store_true", help="never post")
 
-    sub.add_parser("status", help="show counts by status")
+    sub.add_parser("status", help="show counts by niche and status")
 
     s = sub.add_parser("show", help="print one record by post id")
     s.add_argument("post_id")
@@ -74,12 +74,18 @@ def main(argv: list[str] | None = None) -> int:
 
 def _dispatch(args) -> int:
     settings = load_settings(args.config)
+    niches = settings.active_niches(args.niche)
+    niche_names = {n.name for n in niches}
 
     if args.command == "status":
         with Store(settings.database_path) as st:
-            counts = st.counts()
-        for status in sorted(store_mod.STATUSES):
-            print(f"{status:>9}: {counts.get(status, 0)}")
+            by_niche = st.counts_by_niche()
+        statuses = sorted(store_mod.STATUSES)
+        print(f"{'niche':<18}" + "".join(f"{s:>10}" for s in statuses))
+        for niche, counts in sorted(by_niche.items()):
+            if args.niche and niche not in niche_names:
+                continue
+            print(f"{(niche or '(no niche)'):<18}" + "".join(f"{counts.get(s, 0):>10}" for s in statuses))
         return 0
 
     if args.command == "show":
@@ -92,60 +98,67 @@ def _dispatch(args) -> int:
         return 0
 
     needs_claude = args.command in {"scan", "run"}
-    creds = load_credentials(args.env, require_anthropic=needs_claude)
-    reddit = RedditClient(creds)
+    creds = load_all_credentials(args.env, settings.accounts(niches), require_anthropic=needs_claude)
+    clients = {name: RedditClient(c) for name, c in creds.items()}
 
     if args.command == "check":
-        name = reddit.whoami()
-        print(f"reddit: logged in as u/{name}")
-        print(f"anthropic key: {'set' if creds.anthropic_api_key else 'NOT set'}")
-        samples = study.load(args.samples)
-        print(f"style samples: {len(samples)} loaded from {args.samples}")
-        print(f"subreddits: {', '.join(settings.subreddits)}")
+        for name, client in clients.items():
+            user = client.whoami()
+            used_by = [n.name for n in niches if n.account == name]
+            print(f"account '{name}': logged in as u/{user}  (niches: {', '.join(used_by)})")
+        any_creds = next(iter(creds.values()))
+        print(f"anthropic key: {'set' if any_creds.anthropic_api_key else 'NOT set'}")
+        for n in niches:
+            count = len(study.load(n.samples_path))
+            print(f"niche '{n.name}': {len(n.subreddits)} subreddits, {len(n.keywords)} keywords, {count} style samples in {n.samples_path}")
         print(f"approval mode: {'on' if settings.approval_mode else 'OFF (posts automatically)'}")
         return 0
 
     if args.command == "study":
-        reddit.whoami()
         subreddits = [x.strip() for x in args.subreddits.split(",") if x.strip()] if args.subreddits else None
-        samples = study.collect(reddit, settings, subreddits=subreddits, posts_per_subreddit=args.posts, replies_per_post=args.per_post, time_filter=args.time)
-        study.save(samples, args.samples)
-        stats = study.summarize(samples)
-        print(f"saved {stats.get('count', 0)} replies to {args.samples}")
-        if stats.get("count"):
-            print(f"median length: {stats['median_chars']} chars, {stats['median_sentences']} sentences")
-            print(f"replies using lists: {stats['percent_with_lists']}%")
-            print(f"replies starting lowercase: {stats['percent_lowercase_start']}%")
+        for n in niches:
+            client = clients[n.account]
+            client.whoami()
+            samples = study.collect(client, n, subreddits=subreddits, posts_per_subreddit=args.posts, replies_per_post=args.per_post, time_filter=args.time)
+            study.save(samples, n.samples_path)
+            stats = study.summarize(samples)
+            print(f"[{n.name}] saved {stats.get('count', 0)} replies to {n.samples_path}")
+            if stats.get("count"):
+                print(f"    median length {stats['median_chars']} chars, {stats['median_sentences']} sentences; "
+                      f"{stats['percent_with_lists']}% use lists; {stats['percent_lowercase_start']}% start lowercase")
         return 0
 
     with Store(settings.database_path) as st:
         if args.command == "review":
-            return _review(st, settings, reddit, approve_all=args.all)
+            return _review(st, niche_names if args.niche else None, approve_all=args.all)
 
         dry_run = getattr(args, "dry_run", False)
-        samples = study.load(args.samples) if needs_claude else None
-        answerer = Answerer(settings, samples=samples) if needs_claude else None
-        bot = Bot(settings, st, reddit, answerer, dry_run=dry_run)  # type: ignore[arg-type]
+        answerer = Answerer(settings, samples=study.load_all(settings, niches)) if needs_claude else None
+        bot = Bot(settings, st, clients, answerer, niches=niches, dry_run=dry_run)  # type: ignore[arg-type]
 
         if args.command == "scan":
-            reddit.whoami()
-            if needs_claude and not samples:
-                logging.getLogger(__name__).warning("no style samples found; run `pest-bot study` first for more natural replies")
+            for client in clients.values():
+                client.whoami()
+            for n in niches:
+                if not answerer.samples.get(n.name):
+                    logging.getLogger(__name__).warning("[%s] no style samples; run `helper-bot study` first for more natural replies", n.name)
             r = bot.scan()
             print(f"seen {r.seen}, drafted {r.drafted}, posted {r.posted}, "
                   f"skipped by filter {r.skipped_filter}, skipped by model {r.skipped_model}, errors {len(r.errors)}")
             if settings.approval_mode and r.drafted:
-                print("run `pest-bot review` to approve drafts, then `pest-bot post`")
+                print("run `helper-bot review` to approve drafts, then `helper-bot post`")
             return 0
 
         if args.command == "post":
-            reddit.whoami()
+            for client in clients.values():
+                client.whoami()
             r = bot.post_approved()
             print(f"posted {r.posted}, held for rate limit {r.held_rate_limit}, skipped {r.skipped}, failed {r.failed}")
             return 0 if not r.errors else 1
 
         if args.command == "run":
-            reddit.whoami()
+            for client in clients.values():
+                client.whoami()
             bot.run_forever(args.interval)
             return 0
 
@@ -153,7 +166,7 @@ def _dispatch(args) -> int:
 
 
 def _print_record(rec: store_mod.Record) -> None:
-    print(f"[{rec.status}] r/{rec.subreddit}: {rec.title}")
+    print(f"[{rec.status}] [{rec.niche or 'no niche'} / account {rec.account}] r/{rec.subreddit}: {rec.title}")
     print(rec.url)
     if rec.reason:
         print(f"reason: {rec.reason}")
@@ -162,8 +175,10 @@ def _print_record(rec: store_mod.Record) -> None:
         print(textwrap.indent(rec.draft, "    "))
 
 
-def _review(st: Store, settings, reddit: RedditClient, *, approve_all: bool) -> int:
+def _review(st: Store, niche_names: set[str] | None, *, approve_all: bool) -> int:
     pending = st.list_by_status(store_mod.PENDING)
+    if niche_names is not None:
+        pending = [r for r in pending if r.niche in niche_names]
     if not pending:
         print("nothing pending")
         return 0
@@ -207,7 +222,7 @@ def _review(st: Store, settings, reddit: RedditClient, *, approve_all: bool) -> 
             print("a / e / r / s / q")
     remaining = len(st.list_by_status(store_mod.PENDING))
     approved = len(st.list_by_status(store_mod.APPROVED))
-    print(f"\n{approved} approved, {remaining} still pending. Run `pest-bot post` to publish.")
+    print(f"\n{approved} approved, {remaining} still pending. Run `helper-bot post` to publish.")
     return 0
 
 

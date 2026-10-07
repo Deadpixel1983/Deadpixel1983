@@ -1,11 +1,11 @@
-from pest_bot import study
+from helper_bot import study
 from tests.conftest import make_post
 
 
-def test_looks_like_question(settings):
-    assert study.looks_like_question(make_post(), settings)
-    assert not study.looks_like_question(make_post(title="Ant story", body="We had ants once. It was a time."), settings)
-    assert not study.looks_like_question(make_post(is_self=False), settings)
+def test_looks_like_question(niche):
+    assert study.looks_like_question(make_post(), niche)
+    assert not study.looks_like_question(make_post(title="Ant story", body="We had ants once. It was a time."), niche)
+    assert not study.looks_like_question(make_post(is_self=False), niche)
 
 
 def test_usable_reply_filters():
@@ -18,7 +18,7 @@ def test_usable_reply_filters():
     assert not study.usable_reply({**good, "body": good["body"] + " see https://example.com"})
 
 
-def test_collect_and_summarize(settings, tmp_path):
+def test_collect_and_summarize(niche, tmp_path):
     class FakeClient:
         def top_posts(self, name, limit, time_filter):
             return iter([make_post(id="q1"), make_post(id="q2", title="no question here", body="Just a story about ants, nothing to ask.")])
@@ -30,15 +30,22 @@ def test_collect_and_summarize(settings, tmp_path):
                 {"id": "c3", "author": "b", "body": "- one\n- two\n- three, and that is honestly all there is to it for ants in a kitchen.", "score": 5, "is_op": False},
             ]
 
-    samples = study.collect(FakeClient(), settings)
+    samples = study.collect(FakeClient(), niche)
     assert [s["score"] for s in samples] == [20, 5]
     stats = study.summarize(samples)
     assert stats["count"] == 2 and stats["percent_with_lists"] == 50
-    path = tmp_path / "s.yaml"
+    path = tmp_path / "nested" / "s.yaml"
     study.save(samples, path)
     assert study.load(path)[0]["reply"].startswith("bait, not spray")
     assert study.load(tmp_path / "missing.yaml") == []
 
 
-def test_shipped_samples_load():
-    assert len(study.load("samples.yaml")) >= 5
+def test_shipped_samples_load_for_every_niche():
+    from helper_bot.config import load_settings
+
+    s = load_settings("config.yaml")
+    loaded = study.load_all(s)
+    assert set(loaded) == set(s.niches)
+    for name, samples in loaded.items():
+        assert len(samples) >= 5, name
+        assert all(sample["reply"] for sample in samples)

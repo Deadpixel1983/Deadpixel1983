@@ -5,7 +5,7 @@ from __future__ import annotations
 import re
 import time
 
-from .config import Settings
+from .config import Niche, Settings
 from .models import Post
 
 
@@ -26,7 +26,7 @@ def _contains_any(text: str, terms: list[str]) -> str | None:
     return None
 
 
-def evaluate(post: Post, settings: Settings, *, now: float | None = None) -> tuple[bool, str]:
+def evaluate(post: Post, settings: Settings, niche: Niche, *, now: float | None = None) -> tuple[bool, str]:
     """Return (is_candidate, reason). The reason is human-readable for logs."""
     now = time.time() if now is None else now
 
@@ -45,15 +45,35 @@ def evaluate(post: Post, settings: Settings, *, now: float | None = None) -> tup
 
     text = f"{post.title}\n{post.body}"
 
-    excluded = _contains_any(text, settings.exclude_keywords)
+    excluded = _contains_any(text, niche.exclude_keywords)
     if excluded:
         return False, f"matched exclude keyword '{excluded}'"
 
     if len(post.body.strip()) < settings.min_body_chars:
         return False, f"body too short ({len(post.body.strip())} chars)"
 
-    matched = _contains_any(text, settings.keywords)
+    matched = _contains_any(text, niche.keywords)
     if not matched:
-        return False, "no pest keyword matched"
+        return False, f"no {niche.name} keyword matched"
 
     return True, f"matched keyword '{matched}'"
+
+
+def match_niche(post: Post, settings: Settings, niches: list[Niche], *, now: float | None = None) -> tuple[Niche | None, str]:
+    """Pick the first niche (in config order) that accepts the post.
+
+    Returns (niche, reason). If no niche accepts it, niche is None and reason
+    explains the last rejection, or the generic one when none applied.
+    """
+    reasons: list[str] = []
+    for niche in niches:
+        if post.subreddit.lower() not in {s.lower() for s in niche.subreddits}:
+            continue
+        ok, reason = evaluate(post, settings, niche, now=now)
+        if ok:
+            return niche, reason
+        reasons.append(reason)
+    if not reasons:
+        return None, "subreddit not configured for any niche"
+    # If every niche gave the same structural reason, report it once.
+    return None, "; ".join(dict.fromkeys(reasons))

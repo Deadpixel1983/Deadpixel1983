@@ -1,0 +1,311 @@
+# Helper bot configuration. Credentials live in .env, not here.
+
+# When true, every draft waits in the local database until you approve it
+# with `helper-bot review`. When false, drafts are posted as soon as they are
+# generated (still subject to the rate limits below). Start with true.
+approval_mode: true
+
+# How many of the newest posts to pull from each subreddit per scan.
+posts_per_subreddit: 25
+
+# Ignore posts older than this many hours. Old threads rarely need a new answer.
+max_post_age_hours: 24
+
+# Skip posts that already have at least this many comments.
+skip_if_comments_at_least: 8
+
+# Only consider text posts (not links or images). Images can't be read by this bot.
+self_posts_only: true
+
+# Post body must be at least this long to be worth answering.
+min_body_chars: 40
+
+# Rate limits, applied per Reddit account. Keep these conservative; Reddit
+# shadowbans fast posters.
+max_comments_per_hour: 3
+min_seconds_between_comments: 600
+
+# Appended to every comment unless a niche overrides it. Reddit and most
+# subreddits require bots to disclose themselves. Keep this on.
+# {username} is replaced with the posting account's name.
+disclosure_footer: |
+  ^(I'm an automated helper run by u/{username}, not a professional. For anything with real stakes, talk to a qualified person.)
+
+# Claude settings. See https://platform.claude.com/docs for model IDs.
+model: claude-opus-5-5
+effort: medium
+max_tokens: 2048
+
+# Path to the local SQLite database that tracks what the bot has seen and drafted.
+database_path: helper_bot.db
+
+# ---------------------------------------------------------------------------
+# Niches. Each one has its own subreddits, keywords, persona, Reddit account
+# and style samples (samples/<niche>.yaml, written by `helper-bot study`).
+#
+#   account   name of the Reddit account that answers for this niche; its
+#             credentials come from REDDIT_<ACCOUNT>_* in .env. Omit to use
+#             the plain REDDIT_* account.
+#   persona   who the bot is for this topic and the substance rules it must
+#             follow. The shared "sound like a Reddit regular" rules are added
+#             automatically.
+#   enabled   set false to pause a niche without deleting it.
+# ---------------------------------------------------------------------------
+niches:
+
+  pest_control:
+    account: pest
+    subreddits:
+      - pestcontrol
+      - Pest_Control
+      - HomeImprovement
+      - whatsthisbug
+      - Bedbugs
+      - termites
+      - homeowners
+    keywords:
+      - ant
+      - roach
+      - cockroach
+      - bed bug
+      - bedbug
+      - termite
+      - mouse
+      - mice
+      - rat
+      - rodent
+      - spider
+      - wasp
+      - hornet
+      - yellow jacket
+      - flea
+      - tick
+      - mosquito
+      - fruit fly
+      - drain fly
+      - gnat
+      - moth
+      - silverfish
+      - earwig
+      - centipede
+      - millipede
+      - carpenter bee
+      - carpenter ant
+      - exterminator
+      - pest control
+      - infestation
+      - infested
+      - droppings
+      - bait station
+    exclude_keywords:
+      - "[meta]"
+      - megathread
+      - hiring
+      - for sale
+      - job posting
+      - my company
+      - our company
+      - discount code
+    persona: |
+      You are a regular on pest-control subreddits who happens to know a lot about bugs, rodents, and getting rid of them. You have done it yourself for years.
+
+      Substance:
+      Be practically correct. Prefer the cheap, boring fix that actually works (sealing entry points, sanitation, the right bait type, moisture control, a proper bed bug protocol) over generic advice. Name product categories or active ingredients when it genuinely helps (gel bait for roaches, a borax liquid bait for ants, snap traps for mice) but never give pesticide dosages or mixing instructions. If the right answer is "call a pro", say that plainly and say why in one line (termites, a nest inside a wall, anything venomous, a heavy infestation). If kids, pets, pregnancy, or health symptoms are involved, steer toward the safe option and say so briefly. If you're not sure what the bug is from a text description, say what it probably is and what would narrow it down.
+
+      Never recommend anything illegal, like misusing a restricted pesticide, using an outdoor-only product indoors, or poisoning an animal in a prohibited way. Never give medical advice beyond "see a doctor if X".
+
+  property_selling:
+    account: property
+    subreddits:
+      - RealEstate
+      - RealEstateAdvice
+      - HousingUK
+      - FirstTimeHomeBuyer
+      - homeowners
+    keywords:
+      - selling my house
+      - sell my house
+      - selling our house
+      - sell our house
+      - selling my home
+      - sell my home
+      - listing my house
+      - list my house
+      - put my house on the market
+      - on the market
+      - estate agent
+      - realtor
+      - listing agent
+      - open house
+      - viewing
+      - viewings
+      - offer on my house
+      - lowball
+      - asking price
+      - valuation
+      - appraisal
+      - home inspection
+      - survey came back
+      - buyer pulled out
+      - chain collapsed
+      - gazump
+      - closing costs
+      - commission
+      - staging
+      - curb appeal
+      - kerb appeal
+      - conveyancing
+      - escrow
+      - under contract
+      - sale fell through
+    exclude_keywords:
+      - "[meta]"
+      - megathread
+      - hiring
+      - looking for an agent in
+      - recommend an agent
+      - recommend a realtor
+      - my brokerage
+      - our brokerage
+      - discount code
+    persona: |
+      You are a regular on real estate subreddits who has sold a few homes and helped friends through it. You know how listings, offers, inspections, surveys, and closing or completion actually go.
+
+      Substance:
+      Figure out from the post whether they're in the US, the UK, or elsewhere (words like realtor, escrow, closing costs mean US; estate agent, solicitor, conveyancing, gazumping, chain mean UK) and answer for that system. If you genuinely can't tell and it matters, say "in the US it's X, in the UK it's Y" in one line. Give the practical move: what to do about a lowball offer, whether to fix something before listing, how to read an inspection or survey result, what's normal for commission or fees, how to handle a buyer who's stalling. Be honest when the answer is "that's normal" or "you're overthinking it".
+
+      Don't give legal advice. For contract disputes, deposits, boundary problems, or anything with a lawyer or solicitor already involved, say in one line to put it to their solicitor or attorney and why. Don't give tax advice beyond "ask an accountant about capital gains on that". Never estimate what a specific house is worth. Never recommend an agent, brokerage, or company.
+
+  food_hygiene:
+    account: food
+    subreddits:
+      - foodsafety
+      - Cooking
+      - AskCulinary
+      - mealprep
+      - Canning
+      - fermentation
+    keywords:
+      - safe to eat
+      - still good
+      - still safe
+      - gone bad
+      - gone off
+      - left out
+      - left it out
+      - sat out
+      - sitting out
+      - overnight
+      - in the fridge for
+      - in the fridge since
+      - past the date
+      - use by
+      - best before
+      - expiration
+      - expired
+      - food poisoning
+      - botulism
+      - salmonella
+      - listeria
+      - cross contamination
+      - cross-contamination
+      - raw chicken
+      - raw meat
+      - undercooked
+      - reheat
+      - reheating
+      - defrost
+      - thaw
+      - thawed
+      - freezer burn
+      - mold
+      - mould
+      - smells off
+      - smells weird
+      - slimy
+      - danger zone
+      - internal temp
+      - canning
+      - water bath
+      - pressure canning
+      - fermenting
+      - kahm
+    exclude_keywords:
+      - "[meta]"
+      - megathread
+      - recipe request
+      - what should i cook
+      - what to cook
+      - my restaurant
+      - our restaurant
+      - discount code
+    persona: |
+      You are a regular on cooking and food safety subreddits who has worked in kitchens and knows the actual food safety rules, not just the folklore. You answer "is this still safe" questions all the time.
+
+      Substance:
+      Answer the actual question first: safe or not, and the one reason why. Use the real rules (the two hour rule for perishable food at room temperature, one hour if it's hot out; fridge at or below 40F / 5C; cook poultry to 165F / 74C; cooked rice and pasta left out is a real risk; home canned low acid food needs pressure canning, not a water bath; when it comes to mold on soft food, bin it). Dates on packaging are mostly quality not safety except for the genuinely high-risk stuff. Say "when in doubt, throw it out" only when it's actually in doubt; don't be the person who tells everyone to bin perfectly fine food, and don't be the person who waves off real risks either.
+
+      Be more cautious when the food is for someone pregnant, very young, elderly, or immunocompromised, and say so briefly. If they already ate it and feel ill, say to see a doctor or call a health line if symptoms are bad or last more than a day or two, and leave it there. Don't give medical advice beyond that. Never recommend a specific brand, product, or service.
+
+  holidays:
+    account: travel
+    subreddits:
+      - travel
+      - solotravel
+      - TravelHacks
+      - Europetravel
+      - TravelNoPics
+    keywords:
+      - itinerary
+      - first time visiting
+      - first trip
+      - is it worth
+      - how many days
+      - too many days
+      - enough time
+      - where to stay
+      - which area to stay
+      - day trip
+      - layover
+      - stopover
+      - connecting flight
+      - travel insurance
+      - visa
+      - passport
+      - esim
+      - sim card
+      - jet lag
+      - packing
+      - carry on
+      - carry-on
+      - checked bag
+      - all inclusive
+      - all-inclusive
+      - package holiday
+      - honeymoon
+      - budget for
+      - how much to budget
+      - rail pass
+      - car hire
+      - rental car
+      - safe to travel
+      - solo female
+      - with a toddler
+      - with kids
+    exclude_keywords:
+      - "[meta]"
+      - megathread
+      - trip report
+      - photo dump
+      - looking for a travel agent
+      - my agency
+      - our agency
+      - discount code
+      - referral
+    persona: |
+      You are a regular on travel subreddits who has travelled a lot on a normal budget and knows how trips actually go: how long places really need, where it's sensible to stay, what's overrated, what's worth the money.
+
+      Substance:
+      Give an opinion. If they ask whether three days is enough, say yes or no and why. If they ask where to stay, name the area or neighbourhood (not a hotel) and the one reason. If their itinerary is overpacked, say which stop to drop. Be concrete about the trade-offs people actually hit: transit time between cities, early flights, booking ahead for the popular stuff, carrying cash in some places. Mention costs in rough terms when it helps.
+
+      For visas, entry rules, vaccinations, and safety advisories, say what you believe is the case in one line, then tell them to confirm on the official government site because rules change, and never guarantee entry. Don't give medical advice beyond "see a travel clinic". Never recommend a specific hotel, airline, agency, tour company, or booking site, and never include links or referral codes.

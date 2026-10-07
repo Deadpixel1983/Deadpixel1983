@@ -1,7 +1,8 @@
-"""Collect real, upvoted human replies from the target subreddits.
+"""Collect real, upvoted human replies from each niche's subreddits.
 
 The bot uses these as examples of the register it should write in. Run
-`pest-bot study` once before the first scan and again every few weeks.
+`helper-bot study` once before the first scan. It writes one file per niche
+under samples/ and every later scan reuses them.
 """
 
 from __future__ import annotations
@@ -13,13 +14,12 @@ from pathlib import Path
 
 import yaml
 
-from .config import Settings
+from .config import Niche, Settings
 from .models import Post
 from .reddit_client import RedditClient
 
 log = logging.getLogger(__name__)
 
-SAMPLES_PATH = "samples.yaml"
 MIN_REPLY_CHARS = 60
 MAX_REPLY_CHARS = 900
 MIN_SCORE = 3
@@ -27,13 +27,13 @@ BOT_AUTHORS = {"automoderator"}
 _URL = re.compile(r"https?://|www\.", re.IGNORECASE)
 
 
-def looks_like_question(post: Post, settings: Settings) -> bool:
+def looks_like_question(post: Post, niche: Niche) -> bool:
     text = f"{post.title} {post.body}".lower()
     if not post.is_self or len(post.body.strip()) < 20:
         return False
     if "?" not in post.title and "?" not in post.body:
         return False
-    return any(k.lower() in text for k in settings.keywords)
+    return any(k.lower() in text for k in niche.keywords)
 
 
 def usable_reply(comment: dict) -> bool:
@@ -54,19 +54,21 @@ def usable_reply(comment: dict) -> bool:
     return True
 
 
-def collect(client: RedditClient, settings: Settings, *, subreddits: list[str] | None = None, posts_per_subreddit: int = 40, replies_per_post: int = 2, time_filter: str = "year") -> list[dict]:
-    """One-time collection. Pools replies from all subreddits into a single list."""
+def collect(client: RedditClient, niche: Niche, *, subreddits: list[str] | None = None, posts_per_subreddit: int = 40, replies_per_post: int = 2, time_filter: str = "year") -> list[dict]:
+    """One-time collection for a niche. Pools replies from its subreddits into one list."""
     samples: list[dict] = []
-    for name in subreddits or settings.subreddits:
-        log.info("studying r/%s", name)
+    seen_posts: set[str] = set()
+    for name in subreddits or niche.subreddits:
+        log.info("[%s] studying r/%s", niche.name, name)
         try:
             posts = list(client.top_posts(name, limit=posts_per_subreddit, time_filter=time_filter))
         except Exception as exc:  # noqa: BLE001 - keep going with the next subreddit
             log.warning("skipping r/%s: %s", name, exc)
             continue
         for post in posts:
-            if not looks_like_question(post, settings):
+            if post.id in seen_posts or not looks_like_question(post, niche):
                 continue
+            seen_posts.add(post.id)
             try:
                 comments = client.top_level_comments(post.id, limit=15)
             except Exception as exc:  # noqa: BLE001
@@ -103,17 +105,24 @@ def summarize(samples: list[dict]) -> dict:
     }
 
 
-def save(samples: list[dict], path: str | Path = SAMPLES_PATH) -> None:
-    Path(path).write_text(
-        "# Real upvoted replies collected by `pest-bot study`. Used as style examples.\n"
+def save(samples: list[dict], path: str | Path) -> None:
+    path = Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(
+        "# Real upvoted replies collected by `helper-bot study`. Used as style examples.\n"
         + yaml.safe_dump({"samples": samples}, allow_unicode=True, sort_keys=False, width=100),
         encoding="utf-8",
     )
 
 
-def load(path: str | Path = SAMPLES_PATH) -> list[dict]:
+def load(path: str | Path) -> list[dict]:
     p = Path(path)
     if not p.exists():
         return []
     data = yaml.safe_load(p.read_text(encoding="utf-8")) or {}
     return list(data.get("samples") or [])
+
+
+def load_all(settings: Settings, niches: list[Niche] | None = None) -> dict[str, list[dict]]:
+    """Samples for every (or the given) niche, keyed by niche name."""
+    return {n.name: load(n.samples_path) for n in (niches or settings.active_niches())}
