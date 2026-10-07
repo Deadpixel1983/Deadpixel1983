@@ -38,13 +38,14 @@ class PostReport:
 class RateLimiter:
     """Enforces the per-hour and spacing limits per Reddit account."""
 
-    def __init__(self, settings: Settings, store: Store):
+    def __init__(self, settings: Settings, store: Store, *, clock=time.time):
         self.settings = settings
         self.store = store
+        self.clock = clock
 
     def wait_seconds(self, account: str, now: float | None = None) -> float:
         """0 if this account may post now, else how long until it may."""
-        now = time.time() if now is None else now
+        now = self.clock() if now is None else now
         waits = [0.0]
         last = self.store.last_comment_time(account=account)
         if last is not None:
@@ -65,6 +66,7 @@ class Bot:
         *,
         niches: list[Niche] | None = None,
         dry_run: bool = False,
+        clock=time.time,
     ):
         self.settings = settings
         self.store = store
@@ -72,7 +74,8 @@ class Bot:
         self.answerer = answerer
         self.niches = niches or settings.active_niches()
         self.dry_run = dry_run
-        self.limiter = RateLimiter(settings, store)
+        self.clock = clock
+        self.limiter = RateLimiter(settings, store, clock=clock)
         missing = [n.account for n in self.niches if n.account not in clients]
         if missing:
             raise ValueError(f"no Reddit client for account(s): {', '.join(sorted(set(missing)))}")
@@ -188,9 +191,33 @@ class Bot:
             report.failed += 1
             report.errors.append(f"{rec.id}: {exc}")
             return
-        self.store.record_posted(rec.id, comment_id)
+        self.store.record_posted(rec.id, comment_id, posted_at=self.clock())
         report.posted += 1
         log.info("[%s] posted comment %s as u/%s on %s", rec.niche, comment_id, client.username, rec.url)
+
+    def drain_approved(self, *, niche: str | None = None, sleep=time.sleep) -> PostReport:
+        """Post everything approved, sleeping through rate limits until the queue is empty.
+
+        Meant for a once-a-day workflow: approve the day's drafts, then let this
+        run in the background and space the comments out per account.
+        """
+        total = PostReport()
+        while True:
+            r = self.post_approved(niche=niche)
+            total.posted += r.posted
+            total.skipped += r.skipped
+            total.failed += r.failed
+            total.errors.extend(r.errors)
+            if r.held_rate_limit == 0:
+                return total
+            remaining = self.store.list_by_status(store_mod.APPROVED, niche=niche)
+            remaining = [x for x in remaining if x.niche in {n.name for n in self.niches}]
+            if not remaining:
+                return total
+            wait = min(self.limiter.wait_seconds(rec.account) for rec in remaining)
+            wait = max(wait, 1.0)
+            log.info("drain: %d approved left; sleeping %d s for the rate limit", len(remaining), int(wait))
+            sleep(wait)
 
     def render_comment(self, draft: str, niche: Niche, username: str) -> str:
         footer = self.settings.footer_for(niche).strip()

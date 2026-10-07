@@ -41,9 +41,10 @@ def build_parser() -> argparse.ArgumentParser:
 
     s = sub.add_parser("post", help="post approved drafts (respects per-account rate limits)")
     s.add_argument("--dry-run", action="store_true", help="print instead of posting")
+    s.add_argument("--drain", action="store_true", help="keep going, waiting out the rate limit, until nothing approved is left")
 
-    s = sub.add_parser("run", help="scan on a loop; in approval mode this only drafts")
-    s.add_argument("--interval", type=int, default=600, help="seconds between scans")
+    s = sub.add_parser("run", help="scan on a loop, once a day by default; in approval mode this only drafts")
+    s.add_argument("--interval", type=int, default=86400, help="seconds between scans (default: one day)")
     s.add_argument("--dry-run", action="store_true", help="never post")
 
     sub.add_parser("status", help="show counts by niche and status")
@@ -165,7 +166,7 @@ def _dispatch(args) -> int:
         if args.command == "post":
             for client in clients.values():
                 client.whoami()
-            r = bot.post_approved()
+            r = bot.drain_approved() if args.drain else bot.post_approved()
             print(f"posted {r.posted}, held for rate limit {r.held_rate_limit}, skipped {r.skipped}, failed {r.failed}")
             return 0 if not r.errors else 1
 

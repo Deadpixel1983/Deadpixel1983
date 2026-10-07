@@ -201,3 +201,36 @@ def test_rate_limiter_spacing(settings):
     store.record_posted("p1", "c1", posted_at=now - 100)
     assert 499 < limiter.wait_seconds("pest", now) <= 500
     assert limiter.wait_seconds("food", now) == 0
+
+
+def test_drain_waits_out_rate_limit_until_queue_is_empty(settings):
+    settings.approval_mode = True
+    settings.max_comments_per_hour = 10
+    settings.min_seconds_between_comments = 600
+    store = st.Store()
+    cl = clients()
+    now = [1_000_000.0]
+    sleeps = []
+
+    def fake_sleep(seconds):
+        sleeps.append(seconds)
+        now[0] += seconds
+
+    bot = Bot(settings, store, cl, FakeAnswerer(), clock=lambda: now[0])
+    for pid in ("p1", "p2", "p3"):
+        store.record_draft(pid, "pestcontrol", "t", "u", "d", niche="pest_control", account="pest", status=st.APPROVED)
+    store.record_draft("f1", "foodsafety", "t", "u", "d", niche="food_hygiene", account="food", status=st.APPROVED)
+    r = bot.drain_approved(sleep=fake_sleep)
+    assert r.posted == 4 and r.failed == 0
+    assert [pid for pid, _ in cl["pest"].replies] == ["p1", "p2", "p3"]
+    assert [pid for pid, _ in cl["food"].replies] == ["f1"]
+    # Two waits for the pest account's second and third comments, each about the spacing.
+    assert sleeps == [600.0, 600.0]
+    assert store.list_by_status(st.APPROVED) == []
+
+
+def test_drain_returns_immediately_when_nothing_is_held(settings):
+    bot = Bot(settings, st.Store(), clients(), FakeAnswerer())
+    sleeps = []
+    r = bot.drain_approved(sleep=sleeps.append)
+    assert r.posted == 0 and sleeps == []

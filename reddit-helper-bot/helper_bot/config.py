@@ -89,7 +89,7 @@ class Niche:
 class Settings:
     approval_mode: bool = True
     niches: dict[str, Niche] = field(default_factory=dict)
-    posts_per_subreddit: int = 25
+    posts_per_subreddit: int = 100
     max_post_age_hours: float = 24
     skip_if_comments_at_least: int = 8
     self_posts_only: bool = True

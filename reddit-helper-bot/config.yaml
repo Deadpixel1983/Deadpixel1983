@@ -5,10 +5,13 @@
 # generated (still subject to the rate limits below). Start with true.
 approval_mode: true
 
-# How many of the newest posts to pull from each subreddit per scan.
-posts_per_subreddit: 25
+# How many of the newest posts to pull from each subreddit per scan. The bot
+# is meant to check each subreddit once a day, so this should cover a day of
+# posting. 100 is plenty for most subreddits; raise it for very busy ones.
+posts_per_subreddit: 100
 
-# Ignore posts older than this many hours. Old threads rarely need a new answer.
+# Ignore posts older than this many hours. With one scan a day, 24 means a
+# post is seen exactly once, on the next scan after it appears.
 max_post_age_hours: 24
 
 # Skip posts that already have at least this many comments.

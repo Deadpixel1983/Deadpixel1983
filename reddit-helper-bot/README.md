@@ -108,13 +108,31 @@ helper-bot scan --dry-run
 helper-bot post --dry-run
 ```
 
-To keep drafting in the background:
+## Daily routine
+
+The bot is designed to check each subreddit once a day. A scan pulls the newest 100 posts per subreddit and only considers ones under 24 hours old, so each post is seen exactly once. The simplest routine:
 
 ```bash
-helper-bot run --interval 600
+helper-bot scan            # morning: draft the day's replies
+helper-bot review          # approve the ones you like
+helper-bot post --drain    # post them, spaced out per account, until the queue is empty
 ```
 
-In approval mode `run` only drafts. You still review and post by hand.
+`--drain` waits through the rate limit instead of stopping, so a batch of ten approved drafts on one account with a 10 minute gap takes about an hour and a half to go out. Leave it running in the background.
+
+To have the scan happen on its own, either run the loop (once a day by default):
+
+```bash
+helper-bot run
+```
+
+or schedule `helper-bot scan` with cron, Task Scheduler, or launchd, for example at 8am daily:
+
+```
+0 8 * * * cd /path/to/reddit-helper-bot && .venv/bin/helper-bot scan >> scan.log 2>&1
+```
+
+In approval mode both only draft. You still review and post by hand. With `approval_mode: false`, `run` posts as it goes and `post --drain` is not needed.
 
 ## Going automatic
 
