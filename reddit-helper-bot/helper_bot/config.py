@@ -19,6 +19,9 @@ class ConfigError(Exception):
 DEFAULT_ACCOUNT = "default"
 
 
+PROXY_SCHEMES = {"http", "https", "socks5", "socks5h"}
+
+
 @dataclass
 class Credentials:
     account: str
@@ -27,6 +30,20 @@ class Credentials:
     reddit_username: str
     reddit_password: str
     anthropic_api_key: str | None
+    proxy: str | None = None   # e.g. http://user:pass@host:port ; every call for this account goes through it
+
+
+def validate_proxy_url(url: str, *, account: str) -> str:
+    """Accept http(s) and socks5 proxy URLs with a host. Returns the URL unchanged."""
+    from urllib.parse import urlsplit
+
+    parts = urlsplit(url.strip())
+    if parts.scheme not in PROXY_SCHEMES or not parts.hostname:
+        raise ConfigError(
+            f"Proxy for account '{account}' must look like scheme://[user:pass@]host:port "
+            f"with scheme one of {', '.join(sorted(PROXY_SCHEMES))}; got {url!r}"
+        )
+    return url.strip()
 
 
 @dataclass
@@ -165,6 +182,10 @@ def load_credentials(env_path: str | Path | None = ".env", *, account: str = DEF
     if require_anthropic and not anthropic_key:
         raise ConfigError("Missing credential: set ANTHROPIC_API_KEY in .env or the environment")
 
+    proxy = os.environ.get(f"{prefix}_PROXY", "").strip() or None
+    if proxy:
+        proxy = validate_proxy_url(proxy, account=account)
+
     return Credentials(
         account=account,
         reddit_client_id=need("CLIENT_ID"),
@@ -172,6 +193,7 @@ def load_credentials(env_path: str | Path | None = ".env", *, account: str = DEF
         reddit_username=need("USERNAME"),
         reddit_password=need("PASSWORD"),
         anthropic_api_key=anthropic_key,
+        proxy=proxy,
     )
 
 

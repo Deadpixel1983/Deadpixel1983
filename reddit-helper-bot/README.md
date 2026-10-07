@@ -37,6 +37,20 @@ For each account:
 
 Several niches can share one account. Rate limits are tracked per account, so a busy niche does not throttle the others.
 
+### Per-account proxies
+
+Each account can have its own proxy, set in `.env` as `REDDIT_<ACCOUNT>_PROXY` (or `REDDIT_PROXY` for the default account). Every request that account makes, including the login, goes through its proxy, and nothing else in the process uses it. Leave it blank to connect directly.
+
+Use a sticky proxy, one that keeps the same exit address for a session, so the account's IP persists across runs. Providers usually pin a session through the username, for example `http://user-session-abc123:pass@host:port`. SOCKS5 works too: `socks5h://user:pass@host:port`.
+
+To confirm where each account exits from:
+
+```bash
+helper-bot check --show-ip
+```
+
+It prints the public IP per account and warns if two accounts share one.
+
 Running several accounts is allowed by Reddit as long as each is disclosed and they never interact with each other's posts. Do not have them upvote or reply to one another, and do not try to hide that they are related. That is what Reddit treats as manipulation, and it gets every account removed at once.
 
 ### Anthropic API key

@@ -11,7 +11,7 @@ from . import store as store_mod, study
 from .answerer import Answerer
 from .bot import Bot
 from .config import ConfigError, load_all_credentials, load_settings
-from .reddit_client import RedditClient, RedditError
+from .reddit_client import RedditClient, RedditError, mask_proxy
 from .store import Store
 
 
@@ -24,7 +24,8 @@ def build_parser() -> argparse.ArgumentParser:
 
     sub = p.add_subparsers(dest="command", required=True)
 
-    sub.add_parser("check", help="verify credentials and config for every account, then exit")
+    s = sub.add_parser("check", help="verify credentials and config for every account, then exit")
+    s.add_argument("--show-ip", action="store_true", help="also print the public IP each account exits from")
 
     s = sub.add_parser("study", help="one-time: collect upvoted human replies per niche as style examples")
     s.add_argument("--posts", type=int, default=40, help="top posts per subreddit to look at")
@@ -102,10 +103,22 @@ def _dispatch(args) -> int:
     clients = {name: RedditClient(c) for name, c in creds.items()}
 
     if args.command == "check":
+        ips: dict[str, list[str]] = {}
         for name, client in clients.items():
             user = client.whoami()
             used_by = [n.name for n in niches if n.account == name]
-            print(f"account '{name}': logged in as u/{user}  (niches: {', '.join(used_by)})")
+            line = f"account '{name}': logged in as u/{user}  proxy {mask_proxy(client.proxy)}  (niches: {', '.join(used_by)})"
+            if args.show_ip:
+                try:
+                    ip = client.egress_ip()
+                    ips.setdefault(ip, []).append(name)
+                    line += f"  ip {ip}"
+                except RedditError as exc:
+                    line += f"  ip check failed: {exc}"
+            print(line)
+        for ip, names in ips.items():
+            if len(names) > 1:
+                print(f"warning: accounts {', '.join(names)} share the same public IP {ip}")
         any_creds = next(iter(creds.values()))
         print(f"anthropic key: {'set' if any_creds.anthropic_api_key else 'NOT set'}")
         for n in niches:

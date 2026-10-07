@@ -7,6 +7,7 @@ from typing import Iterator
 
 import praw
 import prawcore
+import requests
 from praw.exceptions import RedditAPIException
 
 from . import __version__
@@ -16,22 +17,65 @@ from .models import Post
 log = logging.getLogger(__name__)
 
 
+IP_ECHO_URL = "https://api.ipify.org?format=json"
+
+
 class RedditError(Exception):
     """A Reddit API call failed in a way the caller should report."""
 
 
+def build_session(proxy: str | None) -> requests.Session:
+    """One HTTP session per account. With a proxy, every request (including the
+    OAuth token fetch) goes through it, and the session's connection pool keeps
+    that binding for as long as the process runs."""
+    session = requests.Session()
+    if proxy:
+        session.proxies = {"http": proxy, "https": proxy}
+        # Don't let a machine-wide HTTP(S)_PROXY override the per-account one.
+        session.trust_env = False
+    return session
+
+
+def mask_proxy(proxy: str | None) -> str:
+    """Proxy URL with credentials hidden, for logs and `check` output."""
+    if not proxy:
+        return "none"
+    from urllib.parse import urlsplit
+
+    parts = urlsplit(proxy)
+    auth = "***@" if parts.username or parts.password else ""
+    port = f":{parts.port}" if parts.port else ""
+    return f"{parts.scheme}://{auth}{parts.hostname}{port}"
+
+
 class RedditClient:
     def __init__(self, creds: Credentials, *, reddit: praw.Reddit | None = None):
+        self.account = creds.account
         self.username = creds.reddit_username
+        self.proxy = creds.proxy
+        self.session = build_session(creds.proxy)
         self.reddit = reddit or praw.Reddit(
             client_id=creds.reddit_client_id,
             client_secret=creds.reddit_client_secret,
             username=creds.reddit_username,
             password=creds.reddit_password,
             # Reddit asks that bots identify themselves in the user agent.
-            user_agent=f"python:pest-help-bot:v{__version__} (by u/{creds.reddit_username})",
+            user_agent=f"python:reddit-helper-bot:v{__version__} (by u/{creds.reddit_username})",
             ratelimit_seconds=300,
+            requestor_kwargs={"session": self.session},
         )
+
+    def egress_ip(self, *, url: str = IP_ECHO_URL, timeout: float = 15) -> str:
+        """The public IP this account's session exits from (through its proxy, if any)."""
+        try:
+            resp = self.session.get(url, timeout=timeout, headers={"User-Agent": "reddit-helper-bot ip check"})
+            resp.raise_for_status()
+            ip = resp.json().get("ip")
+        except (requests.RequestException, ValueError) as exc:
+            raise RedditError(f"IP check for account '{self.account}' failed: {exc}") from exc
+        if not ip:
+            raise RedditError(f"IP check for account '{self.account}' returned no address")
+        return str(ip)
 
     def whoami(self) -> str:
         try:
