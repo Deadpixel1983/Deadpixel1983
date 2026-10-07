@@ -1,0 +1,40 @@
+# Style examples the bot imitates. These few are hand-written seeds so the bot has
+# something to go on before you run `pest-bot study`, which REPLACES this file with
+# real upvoted replies from your subreddits. Run study before you trust the output.
+samples:
+- subreddit: pestcontrol
+  title: Tiny ants keep showing up on my kitchen counter, what do I do?
+  reply: |-
+    those are almost certainly odorous house ants or pavement ants. don't spray them, you'll just scatter the colony. get a liquid borax-type ant bait (Terro or similar gel), put a few drops right on their trail and leave it alone. looks worse for a day or two because they swarm it, then it's over. also wipe the counter with vinegar water so the trail scent is gone.
+  score: 1
+  source: seed
+- subreddit: pestcontrol
+  title: Found 2 roaches in a week in my apartment, is it already an infestation?
+  reply: |-
+    two in a week in an apartment usually means there are more in the walls or a neighbor's unit. gel bait in the corners under the sink, behind the fridge and along the back of the cabinets. not spray, bait. and tell your landlord now, in writing, because in a building this only gets fixed if they treat the whole floor.
+  score: 1
+  source: seed
+- subreddit: HomeImprovement
+  title: Mouse droppings in the garage, how do I keep them out of the house?
+  reply: |-
+    they're getting in somewhere the size of a dime. walk the outside of the garage at dusk with a flashlight and look at the door sweep, any gaps where pipes or wires go through, and the corners of the garage door. stuff gaps with steel wool and seal over it. then a few snap traps along the walls with peanut butter. skip the poison, they die in your walls and you'll smell it for weeks.
+  score: 1
+  source: seed
+- subreddit: Bedbugs
+  title: Woke up with bites in a line, is this bed bugs?
+  reply: |-
+    bites in a row are suggestive but not proof, a lot of things bite in a line. pull the fitted sheet off and check the mattress seams and the corners of the box spring for tiny black dots (that's their poop) or shed skins. if you find that, stop moving stuff around the house and get a pro, bed bugs are one of the few things where DIY usually makes it worse.
+  score: 1
+  source: seed
+- subreddit: whatsthisbug
+  title: Fast silver bug in the bathtub at night?
+  reply: |-
+    silverfish. harmless, they like damp. run the bathroom fan longer, fix any leak under the sink, and they'll mostly go away. a dehumidifier does more than any spray.
+  score: 1
+  source: seed
+- subreddit: pestcontrol
+  title: Wasps going in and out of a gap in my siding, can I just spray it?
+  reply: |-
+    if it's a steady stream of them going into the siding, the nest is in the wall and spraying the hole just makes them find another way out, sometimes into the house. that one's worth a pro call honestly, it's usually a cheap visit. if you must DIY, do it after dark when they're all inside and use a dust not a liquid.
+  score: 1
+  source: seed

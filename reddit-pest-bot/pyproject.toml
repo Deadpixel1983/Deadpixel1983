@@ -1,0 +1,27 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "pest-bot"
+version = "0.1.0"
+description = "A Reddit bot that drafts helpful answers to pest-control questions using Claude."
+requires-python = ">=3.10"
+dependencies = [
+    "anthropic>=1.0",
+    "praw>=7.7",
+    "pyyaml>=6.0",
+    "python-dotenv>=1.0",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8.0"]
+
+[project.scripts]
+pest-bot = "pest_bot.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["pest_bot*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
