@@ -10,9 +10,10 @@ Rules
             the level itself (--trigger touch, default). --trigger close enters
             at the hourly close when the close is above the level.
             Shorts mirror this on the D-day low (--side short/both).
-  Exit    : n hourly bars pass without the trade making a new high (long) /
-            new low (short), measured on hourly highs/lows since entry. Exit at
-            that bar's close.
+  Exit    : n TRADING hours pass without the trade making a new high (long) /
+            new low (short), measured on hourly highs/lows since entry. Only
+            open-market time counts; overnight and weekends are skipped. Exit at
+            that bar's close. (--exit-unit bars / hours for the other readings.)
   Size    : one position at a time, full notional, no pyramiding.
 
 Inputs
@@ -64,11 +65,18 @@ def bars_per_year(df):
     return len(df) / ((df.index[-1] - df.index[0]).total_seconds() / (365.25 * 86400))
 
 
-def backtest(df, ch_hi, ch_lo, n_exit=6, side="long", trigger="touch", cost=0.0002, exit_unit="bars"):
-    """exit_unit: "bars" counts hourly candles since the last new extreme; "hours" counts elapsed clock time."""
+def backtest(df, ch_hi, ch_lo, n_exit=6, side="long", trigger="touch", cost=0.0002, exit_unit="trading_hours"):
+    """exit_unit: "trading_hours" (default) counts only time the market is open, using each bar's real duration
+    (the S&P's last bar is 30 min); "bars" counts hourly candles; "hours" counts elapsed clock time."""
     c, h, l = df["close"].values, df["high"].values, df["low"].values
     idx = df.index
     tsec = (idx - pd.Timestamp(0, tz="UTC")).total_seconds().to_numpy()  # bar timestamps in seconds, resolution-safe
+    # open-market seconds per bar: gap to the next bar inside the same session, capped at 1h; a session's last bar gets the remainder to 16:00 ET (30 min)
+    day = df["day"].values
+    dur = np.full(len(df), 1800.0)
+    same = day[1:] == day[:-1]
+    dur[:-1][same] = np.minimum(tsec[1:] - tsec[:-1], 3600.0)[same]
+    open_cum = np.concatenate([[0.0], np.cumsum(dur)])  # open_cum[i] = market seconds elapsed before bar i starts
     pos, entry_px, entry_i, best, best_i = 0, 0.0, 0, np.nan, 0
     trades, equity = [], np.ones(len(df))
     for i in range(1, len(df)):
@@ -76,7 +84,9 @@ def backtest(df, ch_hi, ch_lo, n_exit=6, side="long", trigger="touch", cost=0.00
         if pos:
             if (pos > 0 and h[i] > best) or (pos < 0 and l[i] < best):
                 best, best_i = (h[i] if pos > 0 else l[i]), i
-            elif (i - best_i >= n_exit) if exit_unit == "bars" else (tsec[i] - tsec[best_i] >= n_exit * 3600):
+            elif ((i - best_i >= n_exit) if exit_unit == "bars" else
+                  (tsec[i] - tsec[best_i] >= n_exit * 3600) if exit_unit == "hours" else
+                  (open_cum[i + 1] - open_cum[best_i + 1] >= n_exit * 3600)):  # market time from the end of the high bar to the end of this bar
                 trades.append({"entry_time": idx[entry_i], "exit_time": idx[i], "side": "long" if pos > 0 else "short",
                                "level": lvl, "entry": entry_px, "exit": c[i], "bars": i - entry_i,
                                "ret": pos * (c[i] / entry_px - 1) - cost})
@@ -135,7 +145,7 @@ def main():
     ap.add_argument("--daily", default=None, help="daily OHLC CSV used to build the channel")
     ap.add_argument("--days", type=int, default=60, help="Donchian lookback in trading days")
     ap.add_argument("--exit", type=int, default=6, help="n without a new extreme before exiting; unit set by --exit-unit")
-    ap.add_argument("--exit-unit", choices=["bars", "hours"], default="bars", help="bars = hourly candles (market time); hours = elapsed clock hours")
+    ap.add_argument("--exit-unit", choices=["trading_hours", "bars", "hours"], default="trading_hours", help="trading_hours = open-market hours only (default); bars = hourly candles; hours = elapsed clock hours")
     ap.add_argument("--side", choices=["long", "short", "both"], default="long")
     ap.add_argument("--trigger", choices=["touch", "close"], default="touch")
     ap.add_argument("--cost", type=float, default=0.0002, help="round-trip friction fraction")
