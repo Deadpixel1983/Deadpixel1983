@@ -64,9 +64,11 @@ def bars_per_year(df):
     return len(df) / ((df.index[-1] - df.index[0]).total_seconds() / (365.25 * 86400))
 
 
-def backtest(df, ch_hi, ch_lo, n_exit=6, side="long", trigger="touch", cost=0.0002):
+def backtest(df, ch_hi, ch_lo, n_exit=6, side="long", trigger="touch", cost=0.0002, exit_unit="bars"):
+    """exit_unit: "bars" counts hourly candles since the last new extreme; "hours" counts elapsed clock time."""
     c, h, l = df["close"].values, df["high"].values, df["low"].values
     idx = df.index
+    tsec = (idx - pd.Timestamp(0, tz="UTC")).total_seconds().to_numpy()  # bar timestamps in seconds, resolution-safe
     pos, entry_px, entry_i, best, best_i = 0, 0.0, 0, np.nan, 0
     trades, equity = [], np.ones(len(df))
     for i in range(1, len(df)):
@@ -74,7 +76,7 @@ def backtest(df, ch_hi, ch_lo, n_exit=6, side="long", trigger="touch", cost=0.00
         if pos:
             if (pos > 0 and h[i] > best) or (pos < 0 and l[i] < best):
                 best, best_i = (h[i] if pos > 0 else l[i]), i
-            elif i - best_i >= n_exit:
+            elif (i - best_i >= n_exit) if exit_unit == "bars" else (tsec[i] - tsec[best_i] >= n_exit * 3600):
                 trades.append({"entry_time": idx[entry_i], "exit_time": idx[i], "side": "long" if pos > 0 else "short",
                                "level": lvl, "entry": entry_px, "exit": c[i], "bars": i - entry_i,
                                "ret": pos * (c[i] / entry_px - 1) - cost})
@@ -132,7 +134,8 @@ def main():
     ap.add_argument("hourly_csv")
     ap.add_argument("--daily", default=None, help="daily OHLC CSV used to build the channel")
     ap.add_argument("--days", type=int, default=60, help="Donchian lookback in trading days")
-    ap.add_argument("--exit", type=int, default=6, help="hourly bars without a new extreme before exiting")
+    ap.add_argument("--exit", type=int, default=6, help="n without a new extreme before exiting; unit set by --exit-unit")
+    ap.add_argument("--exit-unit", choices=["bars", "hours"], default="bars", help="bars = hourly candles (market time); hours = elapsed clock hours")
     ap.add_argument("--side", choices=["long", "short", "both"], default="long")
     ap.add_argument("--trigger", choices=["touch", "close"], default="touch")
     ap.add_argument("--cost", type=float, default=0.0002, help="round-trip friction fraction")
@@ -153,13 +156,13 @@ def main():
         mask = df.index < split
         parts = [(df[mask], ch_hi[mask], ch_lo[mask]), (df[~mask], ch_hi[~mask], ch_lo[~mask])]
         grid = [1, 2, 3, 4, 5, 6, 7, 8, 10, 12, 14, 17, 21, 25, 30, 35, 42, 50, 60, 75, 90, 120]
-        print(f"\nOptimise exit n. side={a.side}, trigger={a.trigger}, cost={a.cost}")
+        print(f"\nOptimise exit n ({a.exit_unit}). side={a.side}, trigger={a.trigger}, cost={a.cost}")
         print(f"In-sample {parts[0][0].index[0].date()} -> {parts[0][0].index[-1].date()} ({len(parts[0][0])} bars) | Out-of-sample {parts[1][0].index[0].date()} -> {parts[1][0].index[-1].date()} ({len(parts[1][0])} bars)")
         print(f"{'n':>4} | {'IS trades':>9} {'IS win%':>7} {'IS PF':>6} {'IS ret':>8} {'IS DD':>8} {'IS Sharpe':>9} | {'OOS trades':>10} {'OOS win%':>8} {'OOS PF':>6} {'OOS ret':>8} {'OOS DD':>8} {'OOS Sharpe':>10}")
         cell = lambda m: f"{m['trades']:>9} {100*m.get('win_rate', float('nan')):>6.1f}% {m.get('profit_factor', float('nan')):>6.2f} {100*m['total_return']:>+7.2f}% {100*m['max_drawdown']:>+7.2f}% {m['sharpe']:>9.2f}"
         rows = []
         for n in grid:
-            mi, mo = [metrics(*backtest(p, hi, lo, n, a.side, a.trigger, a.cost), p) for p, hi, lo in parts]
+            mi, mo = [metrics(*backtest(p, hi, lo, n, a.side, a.trigger, a.cost, a.exit_unit), p) for p, hi, lo in parts]
             rows.append((n, mi, mo))
             print(f"{n:>4} | {cell(mi)} | {cell(mo):>58}")
         best = max((r for r in rows if r[1]["trades"] >= 10), key=lambda r: r[1]["sharpe"], default=None)
@@ -171,9 +174,9 @@ def main():
             print(f"Buy & hold {name}: {100*b['buy_hold_total']:+.2f}% (DD {100*b['buy_hold_max_dd']:+.2f}%)")
         return
 
-    tr, eq = backtest(df, ch_hi, ch_lo, a.exit, a.side, a.trigger, a.cost)
+    tr, eq = backtest(df, ch_hi, ch_lo, a.exit, a.side, a.trigger, a.cost, a.exit_unit)
     m = metrics(tr, eq, df)
-    print(f"\n{a.days}-day Donchian {a.trigger} entry, exit after {a.exit} hourly bars without a new extreme, side={a.side}, cost={a.cost}")
+    print(f"\n{a.days}-day Donchian {a.trigger} entry, exit after {a.exit} {a.exit_unit} without a new extreme, side={a.side}, cost={a.cost}")
     for k, v in m.items():
         print(f"  {k:<16} {fmt(k, v)}")
     if len(tr) and a.by_year:
