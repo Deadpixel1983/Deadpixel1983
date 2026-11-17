@@ -23,6 +23,10 @@ Rule 2 - ladder
 
 Costs: --cost is round trip; half is charged on each fill.
 
+Idle cash: with --tbill CSV (date, yield_pct; e.g. Yahoo ^IRX, the 13-week bill)
+cash accrues at that annualised yield over elapsed calendar days, weekends
+included, so the Monday bar receives three days of interest.
+
 Usage
   python3 donchian_ladder.py gspc_1h.csv --daily sp500_daily.csv --exit 48
   python3 donchian_ladder.py gspc_1h.csv --daily sp500_daily.csv --exit 48 --ref ath --ladder-exit stale
@@ -53,7 +57,19 @@ def open_time(df):
     return np.concatenate([[0.0], np.cumsum(dur)])
 
 
-def simulate(df, ch_hi, ref_hi, n_exit=48, step=0.10, fraction=0.5, ladder_exit="recover", use_breakout=True, use_ladder=True, cost=0.0002):
+def load_tbill(path, df):
+    """Annualised yield fraction aligned to df's bars (forward-filled), and elapsed days per bar for accrual."""
+    t = pd.read_csv(path); t["date"] = pd.to_datetime(t["date"]).dt.date
+    y = t.set_index("date")["yield_pct"].astype(float) / 100
+    days = df["day"].values
+    y = y.reindex(y.index.union(pd.Index(sorted(set(days))))).sort_index().ffill().bfill()
+    yld = y.loc[days].values  # one yield per bar; hourly bars on the same date share it
+    tsec = (df.index - pd.Timestamp(0, tz="UTC")).total_seconds().to_numpy()
+    dt_days = np.concatenate([[0.0], np.diff(tsec) / 86400.0])
+    return yld, dt_days
+
+
+def simulate(df, ch_hi, ref_hi, n_exit=48, step=0.10, fraction=0.5, ladder_exit="recover", use_breakout=True, use_ladder=True, cost=0.0002, tbill=None):
     c, h, l, o = df["close"].values, df["high"].values, df["low"].values, df["open"].values
     oc = open_time(df)
     half = cost / 2
@@ -79,8 +95,11 @@ def simulate(df, ch_hi, ref_hi, n_exit=48, step=0.10, fraction=0.5, ladder_exit=
         cash += units * px * (1 - half)
         fills.append({"time": df.index[i], "kind": kind, "side": "sell", "price": px, "amount": units * px, "units": units, "note": note})
 
+    yld, dt_days = tbill if tbill is not None else (None, None)
     for i in range(len(df)):
         R = ref_hi[i]; CH = ch_hi[i]
+        if yld is not None and cash > 0:
+            cash *= 1 + yld[i] * dt_days[i] / 365.0   # interest on idle cash for the time since the previous bar
         # ---- exits first
         if bu > 0:
             if h[i] > b_best: b_best, b_best_i = h[i], i
@@ -140,6 +159,7 @@ def main():
     ap.add_argument("--no-breakout", action="store_true"); ap.add_argument("--no-ladder", action="store_true")
     ap.add_argument("--cost", type=float, default=0.0002)
     ap.add_argument("--fills-out", default=None)
+    ap.add_argument("--tbill", default=None, help="CSV of date,yield_pct for interest on idle cash (e.g. Yahoo ^IRX)")
     ap.add_argument("--compare", action="store_true", help="run breakout-only, ladder-only and combined, for both refs and both ladder exits")
     a = ap.parse_args()
 
@@ -147,22 +167,28 @@ def main():
     daily = dbo.load_daily(a.daily) if a.daily else None
     ch_hi, _ = dbo.channel_levels(df, daily, a.days)
     refs = {"channel": ch_hi, "ath": ath_levels(df, daily)}
+    tb = load_tbill(a.tbill, df) if a.tbill else None
+    if tb is not None: print(f"idle cash earns the 13-week T-bill yield from {a.tbill} (avg {100*tb[0].mean():.2f}% over this sample)")
     print(f"{len(df)} hourly bars {df.index[0].date()} -> {df.index[-1].date()}; exit n = {a.exit} trading hours; ladder step {100*a.step:.0f}%, {100*a.fraction:.0f}% of available cash per tier; cost {a.cost} round trip")
     split = df.index[len(df) // 2]
     if a.compare:
         for label, sl in (("FULL 2 YEARS", slice(None)), ("YEAR 1", df.index < split), ("YEAR 2", df.index >= split)):
             d = df[sl]; print(f"\n--- {label}: {d.index[0].date()} -> {d.index[-1].date()} ---")
-            eq, inv, f = simulate(d, ch_hi[sl], refs["channel"][sl], a.exit, a.step, a.fraction, "recover", True, False, a.cost)
+            tbs = (tb[0][sl], tb[1][sl]) if tb is not None else None
+            if tb is not None:
+                cash_eq = pd.Series(np.cumprod(1 + tbs[0] * tbs[1] / 365.0), index=d.index)
+                print(f"{'cash only (T-bills)':<34} ret {100*(cash_eq.iloc[-1]-1):>+7.2f}%")
+            eq, inv, f = simulate(d, ch_hi[sl], refs["channel"][sl], a.exit, a.step, a.fraction, "recover", True, False, a.cost, tbs)
             bh = report("breakout only (100% capital)", eq, inv, f, d)
             for ref in ("channel", "ath"):
                 for lx in ("recover", "stale"):
-                    eq, inv, f = simulate(d, ch_hi[sl], refs[ref][sl], a.exit, a.step, a.fraction, lx, False, True, a.cost)
+                    eq, inv, f = simulate(d, ch_hi[sl], refs[ref][sl], a.exit, a.step, a.fraction, lx, False, True, a.cost, tbs)
                     report(f"ladder only   ref={ref:<7} exit={lx}", eq, inv, f, d)
-                    eq, inv, f = simulate(d, ch_hi[sl], refs[ref][sl], a.exit, a.step, a.fraction, lx, True, True, a.cost)
+                    eq, inv, f = simulate(d, ch_hi[sl], refs[ref][sl], a.exit, a.step, a.fraction, lx, True, True, a.cost, tbs)
                     report(f"breakout+ladder ref={ref:<7} exit={lx}", eq, inv, f, d)
             print(f"{'buy & hold':<34} ret {100*(bh.iloc[-1]-1):>+7.2f}%  maxDD {100*(bh/bh.cummax()-1).min():>+7.2f}%")
         return
-    eq, inv, fills = simulate(df, ch_hi, refs[a.ref], a.exit, a.step, a.fraction, a.ladder_exit, not a.no_breakout, not a.no_ladder, a.cost)
+    eq, inv, fills = simulate(df, ch_hi, refs[a.ref], a.exit, a.step, a.fraction, a.ladder_exit, not a.no_breakout, not a.no_ladder, a.cost, tb)
     report(f"ref={a.ref} ladder-exit={a.ladder_exit}", eq, inv, fills, df)
     if len(fills):
         print("\nFills:"); print(fills.to_string(index=False, formatters={"price": "{:.2f}".format, "amount": "{:.4f}".format, "units": "{:.6f}".format}))
