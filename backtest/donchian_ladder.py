@@ -172,7 +172,7 @@ def main():
     print(f"{len(df)} hourly bars {df.index[0].date()} -> {df.index[-1].date()}; exit n = {a.exit} trading hours; ladder step {100*a.step:.0f}%, {100*a.fraction:.0f}% of available cash per tier; cost {a.cost} round trip")
     split = df.index[len(df) // 2]
     if a.compare:
-        for label, sl in (("FULL 2 YEARS", slice(None)), ("YEAR 1", df.index < split), ("YEAR 2", df.index >= split)):
+        for label, sl in (("FULL PERIOD", slice(None)), ("FIRST HALF", df.index < split), ("SECOND HALF", df.index >= split)):
             d = df[sl]; print(f"\n--- {label}: {d.index[0].date()} -> {d.index[-1].date()} ---")
             tbs = (tb[0][sl], tb[1][sl]) if tb is not None else None
             if tb is not None:

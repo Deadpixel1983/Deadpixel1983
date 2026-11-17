@@ -5,17 +5,26 @@ in the same layout as the Yahoo hourly file (ts_utc, open, high, low, close, vol
 Bars start at 09:30 New York time and run 09:30-10:30 ... 14:30-15:30, 15:30-16:00,
 matching Yahoo's seven bars per session. Prices in the files are scaled by 1000.
 
-    python3 duka_to_hourly.py RAW_DIR OUT_CSV
+    python3 duka_to_hourly.py RAW_DIR OUT_CSV [CALENDAR_DAILY_CSV]
+
+With a daily OHLC file as the third argument, only sessions that appear in it are
+kept, which removes the thin CFD sessions on US market holidays.
 """
 import datetime as dt, glob, lzma, os, struct, sys
 from zoneinfo import ZoneInfo
 
 RAW, OUT = sys.argv[1], sys.argv[2]
+CAL = None
+if len(sys.argv) > 3:
+    import csv
+    CAL = {dt.date.fromisoformat(r["date"]) for r in csv.DictReader(open(sys.argv[3]))}
 NY = ZoneInfo("America/New_York")
 rows = []
 bad = 0
 for path in sorted(glob.glob(os.path.join(RAW, "*.bi5"))):
     day = dt.date.fromisoformat(os.path.basename(path)[:10])
+    if CAL is not None and day not in CAL:
+        continue
     try:
         raw = lzma.decompress(open(path, "rb").read())
     except Exception:
