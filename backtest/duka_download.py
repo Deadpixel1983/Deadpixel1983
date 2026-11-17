@@ -13,7 +13,7 @@ from concurrent.futures import ThreadPoolExecutor
 OUT = sys.argv[1]
 start = dt.date.fromisoformat(sys.argv[2])
 end = dt.date.fromisoformat(sys.argv[3])
-workers = int(sys.argv[4]) if len(sys.argv) > 4 else 4
+workers = int(sys.argv[4]) if len(sys.argv) > 4 else 16
 UA = "sp500-backtest-data-fetch/1.0"
 os.makedirs(OUT, exist_ok=True)
 
@@ -24,7 +24,7 @@ def fetch(d):
     if os.path.exists(dest) or os.path.exists(marker):
         return "skip"
     url = f"https://datafeed.dukascopy.com/datafeed/USA500IDXUSD/{d.year}/{d.month - 1:02d}/{d.day:02d}/BID_candles_min_1.bi5"
-    for attempt in range(6):
+    for attempt in range(10):  # the relay drops about half of all requests after ~10 s; a plain retry usually succeeds
         try:
             req = urllib.request.Request(url, headers={"User-Agent": UA})
             with urllib.request.urlopen(req, timeout=40) as r:
@@ -35,9 +35,9 @@ def fetch(d):
         except urllib.error.HTTPError as e:
             if e.code == 404:
                 open(marker, "w").close(); return "missing"
-            time.sleep(2 * (attempt + 1))
+            time.sleep(0.5)
         except Exception:
-            time.sleep(2 * (attempt + 1))
+            time.sleep(0.5)
     return "failed"
 
 
